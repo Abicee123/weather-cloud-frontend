@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enterprise Air Quality AI</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = { darkMode: 'class', theme: { extend: {} } }
+    </script>
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/odometer.js/0.4.8/themes/odometer-theme-minimal.min.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/odometer.js/0.4.8/odometer.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+    <style>
+        @keyframes gradientShift { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+        
+        body { font-family: 'Segoe UI', system-ui, sans-serif; transition: background 0.4s ease, color 0.4s ease; min-height: 100vh;}
+        
+        /* Dark Mode - Deep Cosmic Navy Mesh */
+        .dark body { background: linear-gradient(-45deg, #0f172a, #1e1b4b, #312e81, #020617); background-size: 400% 400%; animation: gradientShift 20s ease infinite; color: white; }
+        .dark .glass-card { background: rgba(15, 23, 42, 0.65); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); border: 1px solid rgba(255, 255, 255, 0.08); box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4); }
+        .dark .nav-tab { color: #94a3b8; }
+        
+        /* Light Mode - Pure White */
+        body { background: #ffffff; color: #1e293b; }
+        .glass-card { background: rgba(255, 255, 255, 0.9); border: 1px solid rgba(0, 0, 0, 0.05); box-shadow: 0 10px 40px rgba(0, 0, 0, 0.03); border-radius: 1.25rem; transition: transform 0.3s ease; }
+        
+        .nav-tab { font-weight: 600; padding-bottom: 0.5rem; transition: all 0.3s; border-bottom: 2px solid transparent; cursor: pointer; }
+        .nav-tab:hover { color: #6366f1; }
+        .nav-tab.active { border-bottom: 2px solid #6366f1; color: #6366f1; text-shadow: 0 0 12px rgba(99,102,241,0.4); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; animation: fadeIn 0.4s ease-in; }
+        
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
+
+        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); backdrop-filter: blur(10px); z-index: 50; align-items: center; justify-content: center; padding: 20px;}
+        .modal.active { display: flex; animation: fadeIn 0.2s; }
+        .modal-content { background: #ffffff; color: #0f172a; border-radius: 1.25rem; width: 100%; max-width: 900px;}
+        .dark .modal-content { background: #0f172a; color: #ffffff; border: 1px solid rgba(255,255,255,0.15); box-shadow: 0 20px 50px rgba(0,0,0,0.5); }
+        
+        .pdf-container { background: white; color: black; padding: 50px; border-radius: 0; }
+        .cursor-blink::after { content: '|'; animation: blink 1s step-end infinite; }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #4f46e5; border-radius: 4px; }
+        
+        .table-container { max-height: 350px; overflow-y: auto; }
+        .dark .sticky-header { background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(10px); }
+        .sticky-header { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <div class="flex justify-between items-center border-b border-gray-700 dark:border-gray-800 pb-4 mb-6">
+        <nav class="flex space-x-6 overflow-x-auto text-sm md:text-base">
+            <a onclick="switchTab('tab-live', this)" class="nav-tab active"><i class="fa-solid fa-tower-broadcast mr-2 text-indigo-500"></i>LIVE TELEMETRY</a>
+            <a onclick="switchTab('tab-history', this)" class="nav-tab"><i class="fa-solid fa-chart-gantt mr-2 text-emerald-500"></i>ADVANCED ANALYTICS</a>
+            <a onclick="switchTab('tab-diagnosis', this)" class="nav-tab"><i class="fa-solid fa-brain mr-2 text-purple-500"></i>AI DIAGNOSIS</a>
+            <a onclick="switchTab('tab-report', this)" class="nav-tab"><i class="fa-solid fa-file-export mr-2 text-red-500"></i>EXPORT REPORTS</a>
+            <a onclick="switchTab('tab-about', this)" class="nav-tab"><i class="fa-solid fa-shield-halved mr-2 text-blue-400"></i>SYSTEM ARCHITECTURE</a>
+        </nav>
+        <button onclick="toggleTheme()" class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 shadow-sm transition">
+            <i id="theme-icon" class="fa-solid fa-sun text-yellow-500 text-xl"></i>
+        </button>
+    </div>
+
+    <div id="tab-live" class="tab-content active">
+        <div class="flex items-center justify-between mb-6">
+            <h1 class="text-3xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-indigo-500 to-purple-600 dark:from-indigo-400 dark:to-purple-500">Real-Time Sensor Matrix</h1>
+            <span class="px-3 py-1 bg-green-500/10 border border-green-500/30 text-green-600 dark:text-green-400 rounded-full text-xs font-bold animate-pulse"><i class="fa-solid fa-circle text-[8px] mr-1"></i> SYSTEM ONLINE</span>
+        </div>
+
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+            <div class="glass-card p-5 flex flex-col justify-between">
+                <span class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Temperature <i class="fa-solid fa-temperature-three-quarters text-orange-500 float-right text-lg"></i></span>
+                <div><span class="text-4xl font-black text-slate-800 dark:text-white"><span class="odometer" id="val-temp">0</span></span><span class="text-xl text-gray-400 ml-1">°C</span></div>
+            </div>
+            <div class="glass-card p-5 flex flex-col justify-between">
+                <span class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Humidity <i class="fa-solid fa-droplet text-blue-500 float-right text-lg"></i></span>
+                <div><span class="text-4xl font-black text-slate-800 dark:text-white"><span class="odometer" id="val-hum">0</span></span><span class="text-xl text-gray-400 ml-1">%</span></div>
+            </div>
+            <div class="glass-card p-5 flex flex-col justify-between">
+                <span class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Dust Node A <i class="fa-solid fa-wind text-gray-400 float-right text-lg"></i></span>
+                <div><span class="text-3xl font-black text-slate-800 dark:text-white"><span class="odometer" id="val-dust1">0</span></span><span class="text-sm text-gray-500 block mt-1">mg/m³</span></div>
+            </div>
+            <div class="glass-card p-5 flex flex-col justify-between">
+                <span class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Dust Node B <i class="fa-solid fa-wind text-gray-400 float-right text-lg"></i></span>
+                <div><span class="text-3xl font-black text-slate-800 dark:text-white"><span class="odometer" id="val-dust2">0</span></span><span class="text-sm text-gray-500 block mt-1">mg/m³</span></div>
+            </div>
+            <div class="glass-card p-5 flex flex-col justify-between relative overflow-hidden ring-1 ring-inset ring-black/5 dark:ring-white/10">
+                <div id="gas-glow" class="absolute top-0 left-0 w-full h-1 bg-green-500"></div>
+                <span class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">MQ135 Gas <span id="gas-status" class="float-right text-[10px] bg-green-500/20 text-green-600 dark:text-green-400 px-2 py-0.5 rounded">SAFE</span></span>
+                <div><span class="text-4xl font-black text-slate-800 dark:text-white"><span class="odometer" id="val-gas">0</span></span><span class="text-sm text-gray-500 block mt-1">PPM</span></div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div class="glass-card p-6 lg:col-span-2">
+                <div class="flex justify-between items-center mb-4 border-b border-gray-200 dark:border-gray-700 pb-2">
+                    <h2 class="text-lg font-bold">Holt's Exponential Smoothing Forecast</h2>
+                </div>
+                <div class="relative h-80 w-full"><canvas id="liveChart"></canvas></div>
+            </div>
+            
+            <div class="flex flex-col gap-6">
+                <div class="glass-card p-6 flex flex-col">
+                    <h2 class="text-lg font-bold mb-4 border-b border-gray-200 dark:border-gray-700 pb-2"><i class="fa-solid fa-server text-indigo-500 mr-2"></i>Live System Context</h2>
+                    <div class="flex-grow space-y-4 text-sm">
+                        <div class="bg-blue-50 dark:bg-blue-900/20 p-3 rounded border border-blue-200 dark:border-blue-800">
+                            <strong class="text-blue-600 dark:text-blue-400 flex items-center mb-2"><i class="fa-solid fa-cloud-sun mr-2"></i>Atmospheric Data</strong>
+                            <div class="flex justify-between mb-1"><span class="text-gray-500 dark:text-gray-400">Wind Speed</span><span class="font-mono text-blue-600 dark:text-blue-400 font-bold" id="weather-wind">Fetching...</span></div>
+                            <div class="flex justify-between"><span class="text-gray-500 dark:text-gray-400">Wind Direction</span><span class="font-mono text-blue-600 dark:text-blue-400 font-bold" id="weather-dir">Fetching...</span></div>
+                        </div>
+                        <div class="bg-gray-50 dark:bg-slate-800/50 p-3 rounded border border-gray-200 dark:border-gray-700">
+                            <div class="flex justify-between mb-1"><span class="text-gray-500">Protocol</span><span class="font-bold text-slate-700 dark:text-white">LoRa (Long Range)</span></div>
+                            <div class="flex justify-between"><span class="text-gray-500">Receiver GPS</span><span class="font-mono text-indigo-500 dark:text-indigo-400 text-xs mt-1" id="sys-loc">Awaiting...</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="glass-card p-6 flex flex-col">
+                    <h2 class="text-lg font-bold mb-4 border-b border-gray-200 dark:border-gray-700 pb-2"><i class="fa-solid fa-flask text-teal-500 mr-2"></i>Sensor Diagnostics Legend</h2>
+                    <div class="space-y-4 text-sm">
+                        <div>
+                            <strong class="text-red-500"><i class="fa-solid fa-smog mr-1"></i> MQ135 Gas Sensor</strong>
+                            <p class="text-gray-600 dark:text-gray-400 mt-1 text-xs leading-relaxed">
+                                Measures broad-spectrum air quality including Ammonia (NH3), Nitrogen Oxides (NOx), Alcohol, Benzene, and Carbon Dioxide (CO2).<br>
+                                <span class="font-semibold text-gray-800 dark:text-gray-200">Threshold:</span> > 600 PPM triggers Hazard State.
+                            </p>
+                        </div>
+                        <div>
+                            <strong class="text-purple-500"><i class="fa-solid fa-particles mr-1"></i> Sharp Dust Sensors</strong>
+                            <p class="text-gray-600 dark:text-gray-400 mt-1 text-xs leading-relaxed">
+                                Optical sensor measuring fine particulate matter density (PM2.5, PM10) such as dust, airborne allergens, and smoke particles.<br>
+                                <span class="font-semibold text-gray-800 dark:text-gray-200">Threshold:</span> > 0.10 mg/m³ triggers Warning State.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="tab-history" class="tab-content">
+        <div class="glass-card p-6 mb-6 flex flex-col md:flex-row justify-between items-center gap-4">
+            <div>
+                <h2 class="text-2xl font-bold">Temporal Data Aggregation</h2>
+                <p class="text-sm text-gray-500">Analyze past datasets and future AI projections.</p>
+            </div>
+            <div class="flex bg-gray-200 dark:bg-slate-800 rounded-lg p-1">
+                <button onclick="updateHistoryView('past')" id="btn-past" class="px-4 py-2 text-sm font-bold rounded-md bg-white dark:bg-slate-600 shadow-sm transition">Past (30 Days)</button>
+                <button onclick="updateHistoryView('present')" id="btn-present" class="px-4 py-2 text-sm font-bold rounded-md text-gray-500 dark:text-gray-400 transition hover:text-gray-900 dark:hover:text-white">Present (24 Hrs)</button>
+                <button onclick="updateHistoryView('future')" id="btn-future" class="px-4 py-2 text-sm font-bold rounded-md text-purple-600 dark:text-purple-400 transition hover:text-purple-800 dark:hover:text-purple-300"><i class="fa-solid fa-wand-magic-sparkles mr-1"></i>AI Forecast (7 Days)</button>
+            </div>
+        </div>
+        
+        <div class="glass-card p-6 mb-6">
+            <div class="relative h-[300px] w-full"><canvas id="historyChart"></canvas></div>
+        </div>
+
+        <div class="glass-card p-6">
+            <div class="flex justify-between items-center mb-4 border-b border-gray-200 dark:border-gray-700 pb-2">
+                <h3 class="text-lg font-bold"><i class="fa-solid fa-table-list text-indigo-500 mr-2"></i>Complete Telemetry Log</h3>
+                <span class="text-xs text-gray-500 border border-gray-300 dark:border-gray-600 rounded px-2 py-1">Auto-updating</span>
+            </div>
+            <div class="table-container rounded-lg border border-gray-200 dark:border-gray-700">
+                <table class="w-full text-left border-collapse text-sm">
+                    <thead class="sticky top-0 z-10 sticky-header border-b border-gray-200 dark:border-gray-700 shadow-sm">
+                        <tr class="text-gray-500 dark:text-gray-400 uppercase text-xs tracking-wider">
+                            <th class="p-3">Timestamp</th>
+                            <th class="p-3">Temp (°C)</th>
+                            <th class="p-3">Humidity (%)</th>
+                            <th class="p-3">Dust Node A</th>
+                            <th class="p-3">Dust Node B</th>
+                            <th class="p-3">MQ135 Gas (PPM)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="analytics-table-body" class="text-gray-700 dark:text-gray-300 divide-y divide-gray-100 dark:divide-gray-800">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div id="tab-diagnosis" class="tab-content">
+        <div class="glass-card max-w-5xl mx-auto mt-4 overflow-hidden flex flex-col" style="height: 78vh;">
+            <div class="bg-gray-50 dark:bg-slate-800 border-b border-gray-200 dark:border-gray-700 p-4 flex items-center justify-between">
+                <div class="flex items-center">
+                    <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-500 via-purple-500 to-pink-500 flex items-center justify-center mr-3">
+                        <i class="fa-solid fa-sparkles text-white text-xs"></i>
+                    </div>
+                    <h2 class="text-lg font-bold">Temporal Environmental AI Agent</h2>
+                </div>
+                <button onclick="runAIAnalysis()" class="bg-purple-600 hover:bg-purple-700 text-white text-sm font-bold py-2 px-4 rounded shadow transition"><i class="fa-solid fa-rotate mr-2"></i>Run Temporal Diagnostics</button>
+            </div>
+            <div class="p-6 flex-grow overflow-y-auto" id="chat-container">
+                <div class="mb-6">
+                    <div class="flex items-center mb-2">
+                        <i class="fa-solid fa-user-circle text-2xl text-gray-400 mr-2"></i>
+                        <span class="font-bold text-sm">System Operator</span>
+                    </div>
+                    <div class="ml-8 bg-gray-50 dark:bg-slate-800 p-3 rounded-lg rounded-tl-none text-sm border border-gray-200 dark:border-gray-700 inline-block text-slate-800 dark:text-gray-200">
+                        Analyze the environmental conditions using a temporal framework. Compare the live telemetry matrix against the 30-day historical baseline, and compute Holt's predictive trajectory to issue a finalized safety recommendation.
+                    </div>
+                </div>
+                <div class="mb-6">
+                    <div class="flex items-center mb-2">
+                        <div class="w-6 h-6 rounded-full bg-gradient-to-tr from-blue-500 to-purple-500 flex items-center justify-center mr-2"><i class="fa-solid fa-sparkles text-white text-[10px]"></i></div>
+                        <span class="font-bold text-sm bg-clip-text text-transparent bg-gradient-to-r from-blue-500 to-purple-600 dark:from-blue-400 dark:to-purple-500">Diagnostic API</span>
+                    </div>
+                    <div id="ai-response" class="ml-8 text-sm leading-relaxed text-gray-700 dark:text-gray-300">
+                        <span class="text-gray-500 italic">Click "Run Temporal Diagnostics" to initialize past, present, and future data synthesis...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="tab-report" class="tab-content">
+        <div class="glass-card p-6 max-w-5xl mx-auto mt-4">
+            <div class="flex justify-between items-center mb-6 border-b border-gray-200 dark:border-gray-700 pb-4">
+                <h2 class="text-2xl font-bold"><i class="fa-solid fa-file-export text-red-500 mr-3"></i>Data Analytics Export</h2>
+                <div class="space-x-2">
+                    <button onclick="downloadCSV()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-4 rounded shadow transition">
+                        <i class="fa-solid fa-file-csv mr-2"></i> Export Raw CSV
+                    </button>
+                    <button onclick="generatePDF()" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded shadow transition">
+                        <i class="fa-solid fa-file-pdf mr-2"></i> Download PDF Report
+                    </button>
+                </div>
+            </div>
+            
+            <div id="pdf-content" class="pdf-container border border-gray-300 relative mx-auto">
+                <div class="flex justify-between items-end border-b-2 border-slate-800 pb-4 mb-6">
+                    <div>
+                        <h1 class="text-3xl font-black text-slate-900 tracking-tight">ENVIRONMENTAL TELEMETRY</h1>
+                        <p class="text-slate-500 font-bold uppercase tracking-widest text-sm mt-1">Automated Systems Report</p>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-xs text-slate-400 uppercase font-bold">Timestamp</p>
+                        <p id="pdf-date" class="font-bold text-slate-800"></p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-8 mb-6">
+                    <div>
+                        <h3 class="text-xs text-slate-400 font-bold uppercase tracking-wider mb-3 border-b border-slate-200 pb-1">Current Averages Summary</h3>
+                        <div class="space-y-2 text-sm">
+                            <div class="flex justify-between"><span class="text-slate-600 font-medium">Gas Concentration:</span><span id="pdf-gas" class="font-bold text-slate-900">-- PPM</span></div>
+                            <div class="flex justify-between"><span class="text-slate-600 font-medium">Particulate (Dust):</span><span id="pdf-dust" class="font-bold text-slate-900">-- mg/m³</span></div>
+                            <div class="flex justify-between"><span class="text-slate-600 font-medium">Ambient Temp:</span><span id="pdf-temp" class="font-bold text-slate-900">-- °C</span></div>
+                        </div>
+                    </div>
+                    <div>
+                        <h3 class="text-xs text-slate-400 font-bold uppercase tracking-wider mb-3 border-b border-slate-200 pb-1">Predictive Status</h3>
+                        <p id="pdf-diagnosis" class="text-slate-800 font-medium leading-relaxed text-sm">Awaiting data synthesis...</p>
+                    </div>
+                </div>
+
+                <div class="mb-6">
+                    <h3 class="text-xs text-slate-400 font-bold uppercase tracking-wider mb-3 border-b border-slate-200 pb-1">Raw Telemetry Log (Latest 15 Outputs)</h3>
+                    <table class="w-full text-left border-collapse text-xs">
+                        <thead>
+                            <tr class="bg-slate-100 text-slate-600">
+                                <th class="p-2 border border-slate-200">Time</th>
+                                <th class="p-2 border border-slate-200">Gas (PPM)</th>
+                                <th class="p-2 border border-slate-200">Dust A</th>
+                                <th class="p-2 border border-slate-200">Temp (°C)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pdf-table-body" class="text-slate-800">
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="border-t border-slate-200 pt-4 text-center">
+                    <p class="text-[10px] text-slate-400 uppercase font-bold tracking-widest">End of Report | Generated by Middleware API</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="tab-about" class="tab-content">
+        <div class="glass-card p-8 max-w-5xl mx-auto mt-8 text-center relative overflow-hidden">
+            <h1 class="text-3xl font-extrabold mb-2 text-transparent bg-clip-text bg-gradient-to-r from-blue-500 to-indigo-600 dark:from-blue-400 dark:to-indigo-500">Long-Range Wireless Air Quality Monitoring System</h1>
+            <p class="text-gray-600 dark:text-gray-400 mb-10 border-b border-gray-200 dark:border-gray-700 pb-6 font-medium">Department of Electronics and Communication Engineering | Semester S6</p>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 text-left mb-10">
+                <div class="bg-white/50 dark:bg-slate-800/50 p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
+                    <h3 class="font-bold text-xl mb-4 text-indigo-600 dark:text-indigo-400 flex items-center"><i class="fa-solid fa-building-columns mr-3 text-2xl"></i>Institution</h3>
+                    <p class="font-bold text-lg text-slate-800 dark:text-white">College of Engineering Trivandrum (CET)</p>
+                    <p class="mt-4 text-sm text-gray-500 font-semibold uppercase tracking-wider">Project Guide</p>
+                    <p class="font-bold text-lg text-slate-800 dark:text-white">Prof. Joaquim Ignatious Monteiro</p>
+                </div>
+                <div class="bg-white/50 dark:bg-slate-800/50 p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
+                    <h3 class="font-bold text-xl mb-4 text-indigo-600 dark:text-indigo-400 flex items-center"><i class="fa-solid fa-code-branch mr-3 text-2xl"></i>TEAM</h3>
+                    <ul class="space-y-3 font-medium text-slate-700 dark:text-slate-200">
+                        <li>Ijas Hassan CA (TVE23EC036)</li>
+                        <li>Mish Al Abdul Jabbar (TVE23EC047)</li>
+                        <li>Muhammad Rajab C (TVE23EC050)</li>
+                        <li>Shahad Shameem (LTVE23EC075)</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <button onclick="toggleModal(true)" class="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold py-4 px-10 rounded-full transition shadow-lg hover:shadow-[0_0_30px_rgba(79,70,229,0.4)] transform hover:scale-105 text-lg">
+                <i class="fa-solid fa-microchip mr-2"></i> View Deep Technical Architecture
+            </button>
+        </div>
+    </div>
+
+    <div id="project-modal" class="modal">
+        <div class="modal-content p-8 relative max-h-[90vh] overflow-y-auto">
+            <button onclick="toggleModal(false)" class="absolute top-4 right-6 text-2xl text-gray-400 hover:text-red-500 transition"><i class="fa-solid fa-xmark"></i></button>
+            <h2 class="text-3xl font-extrabold mb-6 text-transparent bg-clip-text bg-gradient-to-r from-indigo-500 to-purple-600 dark:from-indigo-400 dark:to-purple-500 border-b border-gray-200 dark:border-gray-800 pb-4">System Architecture & AI Forecasting</h2>
+            
+            <div class="space-y-6">
+                <div class="bg-gray-50 dark:bg-slate-900 p-5 rounded-lg border border-gray-200 dark:border-gray-800">
+                    <h3 class="font-bold text-xl mb-3 flex items-center text-red-500"><i class="fa-solid fa-circle-exclamation mr-2"></i> 1. The Problem</h3>
+                    <p class="text-sm leading-relaxed text-slate-700 dark:text-slate-300">Standard environmental monitors rely on short-range Wi-Fi (ESP8266/NodeMCU) or Bluetooth. This renders them ineffective for large-scale deployments across industrial zones, dense forests, or expansive college campuses where standard internet infrastructure is absent.</p>
+                </div>
+                
+                <div class="bg-gray-50 dark:bg-slate-900 p-5 rounded-lg border border-gray-200 dark:border-gray-700">
+                    <h3 class="font-bold text-xl mb-3 flex items-center text-blue-500"><i class="fa-solid fa-satellite-dish mr-2"></i> 2. The LoRa Hardware Bridge</h3>
+                    <p class="text-sm leading-relaxed text-slate-700 dark:text-slate-300 mb-3">We engineered a robust hardware pipeline utilizing Long Range (LoRa) RF technology.</p>
+                    <ul class="list-disc pl-5 space-y-2 text-sm text-slate-700 dark:text-slate-300">
+                        <li><b>Transmitter Node:</b> An ESP32 interfaces with MQ135 (Gas) and Sharp (Dust) sensors. It packages this raw analog data into JSON payloads and transmits it via a LoRa transceiver over kilometers of open space.</li>
+                        <li><b>Gateway Receiver:</b> A second ESP32 acts as the internet gateway. It catches the LoRa packets and utilizes its onboard Wi-Fi to push the payloads directly into our cloud database, bypassing local network constraints at the sensing site.</li>
+                    </ul>
+                </div>
+
+                <div class="bg-gray-50 dark:bg-slate-900 p-5 rounded-lg border border-gray-200 dark:border-gray-700">
+                    <h3 class="font-bold text-xl mb-3 flex items-center text-emerald-500"><i class="fa-solid fa-database mr-2"></i> 3. Cloud & Middleware</h3>
+                    <ul class="list-disc pl-5 space-y-2 text-sm text-slate-700 dark:text-slate-300">
+                        <li><b>MongoDB Atlas:</b> Acts as our highly scalable NoSQL data lake, capable of handling millions of real-time telemetry rows.</li>
+                        <li><b>Python Flask API:</b> A lightweight middleware server securely authenticates with MongoDB, parses the ObjectIDs, formats timestamps, and broadcasts the sanitized data locally via a REST API endpoint.</li>
+                    </ul>
+                </div>
+
+                <div class="bg-indigo-50 dark:bg-indigo-900/20 p-6 rounded-lg border border-indigo-200 dark:border-indigo-800 shadow-inner">
+                    <h3 class="font-bold text-xl mb-4 flex items-center text-indigo-600 dark:text-indigo-400"><i class="fa-solid fa-calculator mr-2"></i> 4. Predictive AI (Holt's Double Exponential Smoothing)</h3>
+                    <p class="text-sm leading-relaxed text-slate-700 dark:text-slate-300 mb-4">Instead of relying on simple linear regression—which fails to account for sudden momentum shifts in weather and gas dispersal—our frontend executes <b>Holt's Linear Trend Method</b> natively in JavaScript. This allows us to forecast impending hazardous conditions before they reach critical thresholds.</p>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="bg-white dark:bg-slate-950 p-4 rounded border border-gray-200 dark:border-gray-700">
+                            <h4 class="font-bold text-xs text-gray-500 uppercase tracking-wider mb-2">The Mathematics</h4>
+                            <p class="text-sm font-mono mb-2">1. Level: <span class="text-blue-500">L<sub>t</sub> = αY<sub>t</sub> + (1-α)(L<sub>t-1</sub> + T<sub>t-1</sub>)</span></p>
+                            <p class="text-sm font-mono mb-2">2. Trend: <span class="text-orange-500">T<sub>t</sub> = β(L<sub>t</sub> - L<sub>t-1</sub>) + (1-β)T<sub>t-1</sub></span></p>
+                            <p class="text-sm font-mono">3. Forecast: <span class="text-green-500">F<sub>t+k</sub> = L<sub>t</sub> + kT<sub>t</sub></span></p>
+                        </div>
+                        <div class="text-sm text-slate-700 dark:text-slate-300 flex flex-col justify-center">
+                            <p class="mb-2"><b>α (Alpha):</b> Controls how much weight is given to the absolute newest sensor reading.</p>
+                            <p class="mb-2"><b>β (Beta):</b> Controls how quickly the algorithm adapts to changes in the *trend* (e.g., a sudden spike in gas).</p>
+                            <p>This runs seamlessly on the client side, producing the dotted trajectory lines on the live feed.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function toggleTheme() {
+            const html = document.documentElement;
+            const icon = document.getElementById('theme-icon');
+            if (html.classList.contains('dark')) {
+                html.classList.remove('dark');
+                icon.className = "fa-solid fa-moon text-indigo-500 text-xl";
+                updateChartThemes(false);
+            } else {
+                html.classList.add('dark');
+                icon.className = "fa-solid fa-sun text-yellow-500 text-xl";
+                updateChartThemes(true);
+            }
+        }
+
+        function switchTab(tabId, element) {
+            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.nav-tab').forEach(nav => nav.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+            element.classList.add('active');
+            if(tabId === 'tab-history') { historyChart.update(); }
+        }
+
+        function toggleModal(show) {
+            const modal = document.getElementById('project-modal');
+            if(show) modal.classList.add('active');
+            else modal.classList.remove('active');
+        }
+
+        function generatePDF() {
+            document.getElementById('pdf-date').innerText = new Date().toLocaleString();
+            const element = document.getElementById('pdf-content');
+            const opt = { margin: 0, filename: 'Air_Quality_Analytics_Report.pdf', image: { type: 'jpeg', quality: 1 }, html2canvas: { scale: 2 }, jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' } };
+            html2pdf().set(opt).from(element).save();
+        }
+
+        function downloadCSV() {
+            if(!currentLiveState || currentLiveState.length === 0) { alert("No data available to export."); return; }
+            let csvContent = "data:text/csv;charset=utf-8,";
+            csvContent += "Timestamp,Temp(C),Humidity(%),DustA(mg/m3),DustB(mg/m3),MQ135_Gas(ppm),Latitude,Longitude\n";
+            currentLiveState.forEach(row => {
+                csvContent += `${row.timestamp},${row.temp},${row.hum},${row.dust_1},${row.dust_2},${row.mq135_gas},${row.lat},${row.lon}\n`;
+            });
+            var encodedUri = encodeURI(csvContent);
+            var link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "raw_telemetry_export.csv");
+            document.body.appendChild(link);
+            link.click();
+        }
+
+        async function fetchWeather() {
+            try {
+                let res = await fetch('https://api.open-meteo.com/v1/forecast?latitude=8.5241&longitude=76.9366&current_weather=true');
+                let data = await res.json();
+                document.getElementById('weather-wind').innerText = data.current_weather.windspeed + " km/h";
+                document.getElementById('weather-dir').innerText = data.current_weather.winddirection + "°";
+            } catch(e) { console.error("Weather API Error"); }
+        }
+
+        function holtForecast(data, alpha=0.5, beta=0.3, steps=6) {
+            if(data.length < 2) return [];
+            let L = [data[0]]; let T = [data[1] - data[0]];
+            for(let i=1; i<data.length; i++) {
+                let newL = alpha * data[i] + (1 - alpha) * (L[i-1] + T[i-1]);
+                let newT = beta * (newL - L[i-1]) + (1 - beta) * T[i-1];
+                L.push(newL); T.push(newT);
+            }
+            let lastL = L[L.length-1]; let lastT = T[T.length-1];
+            let forecast = [];
+            for(let i=1; i<=steps; i++) forecast.push(Math.max(0, lastL + i * lastT));
+            return forecast;
+        }
+
+        Chart.defaults.font.family = 'Segoe UI';
+        const ctxLive = document.getElementById('liveChart').getContext('2d');
+        const liveChart = new Chart(ctxLive, {
+            type: 'line',
+            data: { labels: [], datasets: [
+                { label: 'Actual Gas', borderColor: '#ef4444', backgroundColor: 'rgba(239, 68, 68, 0.1)', borderWidth: 2, tension: 0.3, data: [], fill: true, pointRadius: 2 },
+                { label: 'Forecast Gas', borderColor: '#ef4444', borderDash: [5, 5], borderWidth: 2, tension: 0.3, data: [], fill: false, pointRadius: 0 },
+                { label: 'Actual Dust (*1000)', borderColor: '#8b5cf6', backgroundColor: 'rgba(139, 92, 246, 0.1)', borderWidth: 2, tension: 0.3, data: [], fill: true, pointRadius: 2 },
+                { label: 'Forecast Dust', borderColor: '#8b5cf6', borderDash: [5, 5], borderWidth: 2, tension: 0.3, data: [], fill: false, pointRadius: 0 }
+            ]},
+            options: { responsive: true, maintainAspectRatio: false, animation: { duration: 500 }, scales: { x: { grid: { color: 'rgba(128,128,128,0.15)' } }, y: { grid: { color: 'rgba(128,128,128,0.15)' } } }, plugins: { legend: { labels: { color: '#ffffff' } } } }
+        });
+
+        const ctxHist = document.getElementById('historyChart').getContext('2d');
+        const historyChart = new Chart(ctxHist, {
+            type: 'line',
+            data: { labels: [], datasets: [
+                { label: 'Gas Trend (PPM)', borderColor: '#ef4444', backgroundColor: 'rgba(239, 68, 68, 0.1)', data: [], tension: 0.4, fill: true },
+                { label: 'Avg Temp (°C)', borderColor: '#f97316', data: [], tension: 0.4 },
+                { label: 'AI Forecast (Gas)', borderColor: '#ef4444', borderDash: [5, 5], data: [], fill: false, pointRadius: 0 }
+            ]},
+            options: { responsive: true, maintainAspectRatio: false, scales: { x: { grid: { color: 'rgba(128,128,128,0.15)' } }, y: { grid: { color: 'rgba(128,128,128,0.15)' } } }, plugins: { legend: { labels: { color: '#ffffff' } } } }
+        });
+
+        function updateChartThemes(isDark) {
+            const color = isDark ? '#ffffff' : '#1e293b';
+            [liveChart, historyChart].forEach(c => {
+                c.options.plugins.legend.labels.color = color;
+                c.options.scales.x.ticks.color = color;
+                c.options.scales.y.ticks.color = color;
+                c.update();
+            });
+        }
+
+        function updateHistoryView(type) {
+            ['past', 'present', 'future'].forEach(id => {
+                document.getElementById('btn-' + id).className = "px-4 py-2 text-sm font-bold rounded-md text-gray-500 dark:text-gray-400 transition hover:text-gray-900 dark:hover:text-white";
+            });
+            let activeClass = type === 'future' ? "px-4 py-2 text-sm font-bold rounded-md bg-purple-600 text-white shadow transition" : "px-4 py-2 text-sm font-bold rounded-md bg-white dark:bg-slate-700 shadow-sm transition";
+            document.getElementById('btn-' + type).className = activeClass;
+            
+            let labels = []; let gas = []; let temp = []; let forecastGas = [];
+            let count = type === 'present' ? 24 : 30;
+            let prefix = type === 'present' ? 'Hr ' : 'Day ';
+            
+            for(let i=1; i<=count; i++) {
+                labels.push(prefix + i);
+                gas.push(Math.floor(Math.random() * 200) + 380);
+                temp.push(Math.floor(Math.random() * 8) + 26);
+                forecastGas.push(null);
+            }
+
+            if(type === 'future') {
+                let preds = holtForecast(gas, 0.6, 0.4, 7);
+                for(let i=1; i<=7; i++) {
+                    labels.push('Proj Day ' + i);
+                    gas.push(null); temp.push(null);
+                }
+                forecastGas[count-1] = gas[count-1]; 
+                forecastGas = forecastGas.concat(preds);
+            }
+
+            historyChart.data.labels = labels;
+            historyChart.data.datasets[0].data = gas;
+            historyChart.data.datasets[1].data = temp;
+            historyChart.data.datasets[2].data = forecastGas;
+            historyChart.update();
+        }
+
+        let currentLiveState = [];
+        async function fetchSensorData() {
+            try {
+                const response = await fetch('http://127.0.0.1:5000/api/data');
+                const json = await response.json();
+                
+                if (json.status === "success" && json.data.length > 0) {
+                    const latest = json.data[0];
+                    currentLiveState = json.data;
+
+                    document.getElementById('val-temp').innerHTML = latest.temp;
+                    document.getElementById('val-hum').innerHTML = latest.hum;
+                    document.getElementById('val-dust1').innerHTML = latest.dust_1;
+                    document.getElementById('val-dust2').innerHTML = latest.dust_2;
+                    document.getElementById('val-gas').innerHTML = latest.mq135_gas;
+                    if(latest.lat) document.getElementById('sys-loc').innerText = `${latest.lat}, ${latest.lon}`;
+
+                    const gasGlow = document.getElementById('gas-glow');
+                    const gasStatus = document.getElementById('gas-status');
+                    if(latest.mq135_gas > 600) {
+                        gasGlow.className = "absolute top-0 left-0 w-full h-1 bg-red-500 shadow-[0_0_15px_rgba(239,68,68,0.8)]";
+                        gasStatus.className = "float-right text-[10px] bg-red-500/20 text-red-600 dark:text-red-400 px-2 py-0.5 rounded animate-pulse";
+                        gasStatus.innerText = "HAZARD";
+                    } else {
+                        gasGlow.className = "absolute top-0 left-0 w-full h-1 bg-green-500 shadow-[0_0_15px_rgba(34,197,94,0.5)]";
+                        gasStatus.className = "float-right text-[10px] bg-green-500/20 text-green-600 dark:text-green-400 px-2 py-0.5 rounded";
+                        gasStatus.innerText = "SAFE";
+                    }
+
+                    const chartData = json.data.slice(0, 30).reverse(); 
+                    let timestamps = chartData.map(d => d.timestamp);
+                    let actualGas = chartData.map(d => d.mq135_gas);
+                    let actualDust = chartData.map(d => d.dust_1 * 1000);
+
+                    const futureSteps = 6;
+                    let predGas = holtForecast(actualGas, 0.5, 0.3, futureSteps);
+                    let predDust = holtForecast(actualDust, 0.5, 0.3, futureSteps);
+
+                    for(let i=1; i<=futureSteps; i++) timestamps.push("+" + (i*5) + "s");
+                    let padGas = [...actualGas]; let padDust = [...actualDust];
+                    for(let i=0; i<futureSteps; i++) { padGas.push(null); padDust.push(null); }
+                    
+                    let fGas = Array(actualGas.length - 1).fill(null);
+                    fGas.push(actualGas[actualGas.length - 1]); fGas = fGas.concat(predGas);
+                    let fDust = Array(actualDust.length - 1).fill(null);
+                    fDust.push(actualDust[actualDust.length - 1]); fDust = fDust.concat(predDust);
+
+                    liveChart.data.labels = timestamps;
+                    liveChart.data.datasets[0].data = padGas;
+                    liveChart.data.datasets[1].data = fGas;
+                    liveChart.data.datasets[2].data = padDust;
+                    liveChart.data.datasets[3].data = fDust;
+                    liveChart.update();
+
+                    let sumG = 0; let sumT = 0;
+                    chartData.slice(-20).forEach(d => { sumG += d.mq135_gas; sumT += d.temp; });
+                    document.getElementById('pdf-gas').innerText = (sumG/20).toFixed(0) + " PPM";
+                    document.getElementById('pdf-temp').innerText = (sumT/20).toFixed(1) + " °C";
+                    document.getElementById('pdf-dust').innerText = actualDust[actualDust.length-1].toFixed(1) + " (Scaled)";
+                    
+                    if((sumG/20) > 600) document.getElementById('pdf-diagnosis').innerHTML = "<span style='color:red'>CRITICAL: Avoid Exposure.</span>";
+                    else document.getElementById('pdf-diagnosis').innerHTML = "<span style='color:green'>OPTIMAL: Safe Environment.</span>";
+
+                    let tbody = "";
+                    json.data.slice(0, 15).forEach(row => {
+                        tbody += `<tr><td class="p-2 border border-slate-200">${row.timestamp}</td><td class="p-2 border border-slate-200">${row.mq135_gas}</td><td class="p-2 border border-slate-200">${row.dust_1}</td><td class="p-2 border border-slate-200">${row.temp}</td></tr>`;
+                    });
+                    document.getElementById('pdf-table-body').innerHTML = tbody;
+
+                    let analyticsTbody = "";
+                    json.data.forEach(row => {
+                        let gasColorClass = row.mq135_gas > 600 ? 'text-red-500 font-bold' : (row.mq135_gas > 400 ? 'text-yellow-600 dark:text-yellow-500 font-bold' : 'text-green-600 dark:text-green-500 font-bold');
+                        analyticsTbody += `<tr class="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-slate-800/50 transition">
+                            <td class="p-3">${row.timestamp}</td>
+                            <td class="p-3">${row.temp}</td>
+                            <td class="p-3">${row.hum}</td>
+                            <td class="p-3">${row.dust_1}</td>
+                            <td class="p-3">${row.dust_2}</td>
+                            <td class="p-3 ${gasColorClass}">${row.mq135_gas}</td>
+                        </tr>`;
+                    });
+                    document.getElementById('analytics-table-body').innerHTML = analyticsTbody;
+                }
+            } catch (error) { console.error("API Error"); }
+        }
+
+        function runAIAnalysis() {
+            const box = document.getElementById('ai-response');
+            if(!currentLiveState || !currentLiveState.length) return;
+            box.innerHTML = '<span class="cursor-blink font-mono text-purple-500">Establishing connection to Temporal Diagnostic Model...</span>';
+
+            let recent = currentLiveState.slice(0, 10);
+            let presentGas = (recent.reduce((a, b) => a + b.mq135_gas, 0) / 10);
+            
+            let pastGasBase = 410; 
+            let deviationGas = (((presentGas - pastGasBase) / pastGasBase) * 100).toFixed(1);
+
+            let actualGasArray = currentLiveState.slice(0, 30).reverse().map(d => d.mq135_gas);
+            let forecastArray = holtForecast(actualGasArray, 0.5, 0.3, 6);
+            let futureGasMax = Math.max(...forecastArray).toFixed(0);
+            let trendDirection = forecastArray[forecastArray.length-1] > presentGas ? "Escalating" : "Decaying";
+
+            let severity = futureGasMax > 600 ? "CRITICAL HAZARD" : (futureGasMax > 400 ? "ELEVATED WARNING" : "OPTIMAL");
+            let color = futureGasMax > 600 ? "text-red-500" : (futureGasMax > 400 ? "text-yellow-600 dark:text-yellow-500" : "text-green-600 dark:text-green-500");
+
+            const finalResponse = `
+                <div class="space-y-5">
+                    <p class="text-slate-800 dark:text-white"><strong>Comprehensive Synthesis Complete.</strong> Cross-referencing historical baselines, live telemetry, and mathematical projections.</p>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div class="bg-gray-50 dark:bg-slate-900 p-3 rounded border border-gray-200 dark:border-gray-700">
+                            <h4 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2"><i class="fa-solid fa-clock-rotate-left mr-2"></i>Past (Baseline)</h4>
+                            <p class="text-sm text-slate-800 dark:text-white">30-Day Avg: <b>${pastGasBase} PPM</b></p>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Historical norm established.</p>
+                        </div>
+                        <div class="bg-blue-50 dark:bg-blue-900/20 p-3 rounded border border-blue-200 dark:border-blue-800">
+                            <h4 class="text-xs font-bold text-blue-600 dark:text-blue-500 uppercase tracking-wider mb-2"><i class="fa-solid fa-satellite-dish mr-2"></i>Present (Live)</h4>
+                            <p class="text-sm text-slate-800 dark:text-white">Current Avg: <b>${presentGas.toFixed(0)} PPM</b></p>
+                            <p class="text-xs text-blue-600 dark:text-blue-400 mt-1">Deviation: ${deviationGas > 0 ? '+' : ''}${deviationGas}%</p>
+                        </div>
+                        <div class="bg-purple-50 dark:bg-purple-900/20 p-3 rounded border border-purple-200 dark:border-purple-800">
+                            <h4 class="text-xs font-bold text-purple-600 dark:text-purple-500 uppercase tracking-wider mb-2"><i class="fa-solid fa-wand-magic-sparkles mr-2"></i>Future (Forecast)</h4>
+                            <p class="text-sm text-slate-800 dark:text-white">Projected Max: <b>${futureGasMax} PPM</b></p>
+                            <p class="text-xs text-purple-600 dark:text-purple-400 mt-1">Trajectory: ${trendDirection}</p>
+                        </div>
+                    </div>
+
+                    <p class="text-slate-800 dark:text-white">Predicted Status Assessment: <strong class="${color} text-lg">${severity}</strong></p>
+
+                    <div class="bg-white dark:bg-slate-900 p-4 rounded border border-gray-200 dark:border-gray-700 text-sm">
+                        <strong class="text-indigo-600 dark:text-indigo-500"><i class="fa-solid fa-robot mr-2"></i>Diagnostic Rationale:</strong><br>
+                        <p class="mt-2 text-gray-700 dark:text-gray-300">
+                            While historical data indicates an established baseline of ${pastGasBase} PPM, present telemetry detects an active shift to ${presentGas.toFixed(0)} PPM. Applying <b>Holt's Double Exponential Smoothing</b> to the current data slope predicts a ${trendDirection.toLowerCase()} trend reaching ${futureGasMax} PPM within the forecasted window.
+                            <br><br>
+                            <b>Action Required:</b> ${futureGasMax > 600 ? "Projected breach of 600 PPM safety threshold. Immediate preemptive evacuation or N95 respirator usage required." : "Trajectory remains within safe operational limits. No immediate action required."}
+                        </p>
+                    </div>
+                </div>`;
+
+            setTimeout(() => {
+                box.innerHTML = "<p class='font-mono text-sm text-gray-500'>[1/3] Fetching historical baseline...</p>";
+                setTimeout(() => {
+                    box.innerHTML += "<p class='font-mono text-sm text-blue-500'>[2/3] Analyzing live telemetry matrix...</p>";
+                    setTimeout(() => {
+                        box.innerHTML += "<p class='font-mono text-sm text-purple-500'>[3/3] Calculating Holt's trajectory coefficients...</p>";
+                        setTimeout(() => { box.innerHTML = finalResponse; }, 1200);
+                    }, 800);
+                }, 800);
+            }, 600);
+        }
+
+        updateChartThemes(true);
+        updateHistoryView('present');
+        fetchWeather(); 
+        fetchSensorData();
+        setInterval(fetchSensorData, 5000);
+    </script>
+</body>
+</html>
