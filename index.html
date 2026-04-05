@@ -443,10 +443,200 @@
 
     <script>
         document.addEventListener("DOMContentLoaded", function () {
-            
             let map = L.map('map').setView([8.5241, 76.9366], 12);
             L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png').addTo(map);
-            let marker = L.marker([8.5241, 76.9366]).addTo(map).bindPopup("<b>Air Quality Node 1</b><br>Live Telemetry Active.").openPopup();
+            let marker = L.marker([8.5241, 76.9366]).addTo(map).bindPopup("<b>Air Quality Node 1</b><br>Awaiting Telemetry...").openPopup();
+
+            window.currentLiveState = [];
+            window.lastMLForecast = null;
+
+            // ==========================================
+            // 🛠️ CALIBRATION SETTINGS
+            // Adjust these numbers to calibrate your raw sensor data for the presentation
+            // ==========================================
+            const GAS_OFFSET = 0;        // Example: Add or subtract PPM (e.g., -50)
+            const GAS_MULTIPLIER = 1.0;  // Example: Multiply raw gas by a factor
+            const DUST_MULTIPLIER = 1.0; // Example: Multiply raw dust by a factor
+
+            function updateUIStatus(status) {
+                const badge = document.getElementById('system-status-badge');
+                const text = document.getElementById('system-status-text');
+                
+                if (status === 'OFFLINE') {
+                    badge.className = "px-3 py-1.5 bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400 rounded-full text-xs font-bold";
+                    text.innerHTML = "<i class='fa-solid fa-cloud-xmark mr-1'></i> CLOUD OFFLINE";
+                    clearSensorUI();
+                } else if (status === 'LORA_DEAD') {
+                    badge.className = "px-3 py-1.5 bg-yellow-500/10 border border-yellow-500/30 text-yellow-600 dark:text-yellow-400 rounded-full text-xs font-bold";
+                    text.innerHTML = "<i class='fa-solid fa-satellite-dish mr-1'></i> CLOUD CONNECTED | LORA WAITING...";
+                    clearSensorUI();
+                } else if (status === 'ONLINE') {
+                    badge.className = "px-3 py-1.5 bg-green-500/10 border border-green-500/30 text-green-600 dark:text-green-400 rounded-full text-xs font-bold";
+                    text.innerHTML = "<i class='fa-solid fa-satellite-dish mr-1 animate-pulse'></i> SYSTEM ONLINE";
+                }
+            }
+
+            function clearSensorUI() {
+                document.getElementById('val-temp').innerHTML = "--";
+                document.getElementById('val-hum').innerHTML = "--";
+                document.getElementById('val-dust1').innerHTML = "--";
+                document.getElementById('val-gas').innerHTML = "--";
+            }
+
+            async function fetchSensorData() {
+                let rawData = [];
+
+                try {
+                    // 1. ATTEMPT CLOUD CONNECTION
+                    const response = await fetch('https://weather-cloud-api.onrender.com/api/data');
+                    
+                    if (!response.ok) throw new Error("Server response not OK");
+                    
+                    const json = await response.json();
+                    
+                    // 2. CHECK FOR LORA DATA
+                    if (json.status === "success" && json.data && json.data.length > 0) {
+                        rawData = json.data;
+                        updateUIStatus('ONLINE');
+                    } else {
+                        // Cloud works, but database is empty (LoRa hasn't sent anything)
+                        updateUIStatus('LORA_DEAD');
+                        return; // Stop processing, we have no data to show
+                    }
+                } catch (error) {
+                    // 3. CLOUD COMPLETELY OFFLINE
+                    updateUIStatus('OFFLINE');
+                    console.error("Cloud Error:", error);
+                    return; // Stop processing
+                }
+
+                window.currentLiveState = rawData;
+                const latest = rawData[0];
+
+                try {
+                    // ==========================================
+                    // 🧪 APPLY CALIBRATION TO LIVE DATA
+                    // ==========================================
+                    let finalTemp = latest.temp;
+                    let finalHum = latest.hum;
+                    let finalGas = Math.round((latest.mq135_gas * GAS_MULTIPLIER) + GAS_OFFSET);
+                    let finalDust = (latest.dust_1 * DUST_MULTIPLIER).toFixed(3);
+
+                    // Ensure gas doesn't show negative values if offset is heavily negative
+                    if (finalGas < 0) finalGas = 0;
+
+                    document.getElementById('val-temp').innerHTML = finalTemp;
+                    document.getElementById('val-hum').innerHTML = finalHum;
+                    document.getElementById('val-dust1').innerHTML = finalDust;
+                    document.getElementById('val-gas').innerHTML = finalGas;
+                    
+                    let lat = parseFloat(latest.lat) || 8.5241;
+                    let lon = parseFloat(latest.lon) || 76.9366;
+                    document.getElementById('map-coords').innerText = `${lat.toFixed(4)} , ${lon.toFixed(4)}`;
+                    marker.setLatLng([lat, lon]).bindPopup(`<b>Air Quality Node 1</b><br>Live Telemetry Active.<br>Gas: ${finalGas} PPM`).update();
+                } catch(e) {
+                    console.error("Error updating UI", e);
+                }
+
+                // UPDATE MAIN LIVE CHART (Time on X axis)
+                let timestamps = rawData.slice(0, 30).reverse().map(d => extractTimeOnly(d.timestamp));
+                
+                // Apply calibration to chart arrays as well
+                let actualGas = rawData.slice(0, 30).reverse().map(d => Math.round((parseFloat(d.mq135_gas) * GAS_MULTIPLIER) + GAS_OFFSET));
+                let actualDust = rawData.slice(0, 30).reverse().map(d => parseFloat(d.dust_1) * DUST_MULTIPLIER * 1000);
+
+                // Add future labels
+                for(let i=1; i<=6; i++) timestamps.push("+" + i + " Hr");
+                
+                let padGas = [...actualGas]; let padDust = [...actualDust]; 
+                for(let i=0; i<6; i++) { padGas.push(null); padDust.push(null); }
+                
+                // Calculate Edge AI (Holts)
+                let holtGasRaw = holtForecast(actualGas, 0.5, 0.3, 6);
+                let holtDustRaw = holtForecast(actualDust, 0.5, 0.3, 6);
+                
+                let fHoltGas = Array(actualGas.length - 1).fill(null);
+                fHoltGas.push(actualGas[actualGas.length - 1]); fHoltGas = fHoltGas.concat(holtGasRaw);
+                
+                let fHoltDust = Array(actualDust.length - 1).fill(null);
+                fHoltDust.push(actualDust[actualDust.length - 1]); fHoltDust = fHoltDust.concat(holtDustRaw);
+
+                // Fetch Cloud AI (ML) Hourly Forecast
+                try {
+                    const mlResponse = await fetch('https://weather-cloud-api.onrender.com/api/ml_forecast');
+                    const mlJson = await mlResponse.json();
+                    
+                    if (mlJson.status === "success") {
+                        window.lastMLForecast = mlJson.forecast;
+                        // Apply Calibration to ML Predictions
+                        let mlGas = mlJson.forecast.gas.map(g => Math.round((g * GAS_MULTIPLIER) + GAS_OFFSET));
+                        let mlDust = mlJson.forecast.dust_1.map(d => (d * DUST_MULTIPLIER) * 1000);
+                        
+                        let fMlGas = Array(actualGas.length - 1).fill(null);
+                        fMlGas.push(actualGas[actualGas.length - 1]); fMlGas = fMlGas.concat(mlGas);
+                        
+                        let fMlDust = Array(actualDust.length - 1).fill(null);
+                        fMlDust.push(actualDust[actualDust.length - 1]); fMlDust = fMlDust.concat(mlDust);
+
+                        window.liveChartInstance.data.labels = timestamps;
+                        window.liveChartInstance.data.datasets[0].data = padGas;
+                        window.liveChartInstance.data.datasets[1].data = fMlGas; 
+                        window.liveChartInstance.data.datasets[2].data = fHoltGas; 
+                        window.liveChartInstance.data.datasets[3].data = padDust;
+                        window.liveChartInstance.data.datasets[4].data = fMlDust; 
+                        window.liveChartInstance.data.datasets[5].data = fHoltDust; 
+                        window.liveChartInstance.update('none');
+
+                        document.getElementById('ml-status').innerHTML = "<i class='fa-solid fa-check-circle mr-1'></i> Model Active";
+                        
+                        let forecastHtml = "";
+                        for(let i=0; i<6; i++) {
+                            let gasColor = mlGas[i] > 600 ? 'text-red-500' : (mlGas[i] > 450 ? 'text-yellow-500' : 'text-green-500');
+                            forecastHtml += `<div class="forecast-card glass-card p-4 text-center border border-gray-200 dark:border-gray-700">
+                                <span class="text-xs font-bold text-gray-500 mb-2 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-full">+${i+1} Hr</span>
+                                <div class="text-xl font-black ${gasColor} mt-2 mb-1">${mlGas[i]} <span class="text-[10px] text-gray-400">PPM</span></div>
+                                <div class="text-xs text-gray-500 flex justify-between px-2"><i class="fa-solid fa-temperature-empty text-orange-400"></i> ${mlJson.forecast.temp[i]}°</div>
+                            </div>`;
+                        }
+                        document.getElementById('forecast-container').innerHTML = forecastHtml;
+                    }
+                } catch(e) { 
+                    document.getElementById('ml-status').innerHTML = "<i class='fa-solid fa-triangle-exclamation mr-1 text-yellow-500'></i> ML Sync Error";
+                }
+
+                // UPDATE ALL TABLES
+                try {
+                    let tbody = "";
+                    rawData.forEach(row => {
+                        let fullDT = extractFullDateTime(row.timestamp);
+                        
+                        // Apply Calibration to Table Data
+                        let tableGas = Math.round((row.mq135_gas * GAS_MULTIPLIER) + GAS_OFFSET);
+                        let tableDust = (row.dust_1 * DUST_MULTIPLIER).toFixed(3);
+                        if (tableGas < 0) tableGas = 0;
+
+                        tbody += `<tr class="border-b border-gray-100 dark:border-gray-800">
+                            <td class="p-3 font-mono text-xs">${fullDT}</td>
+                            <td class="p-3">${row.temp}</td>
+                            <td class="p-3">${row.hum}</td>
+                            <td class="p-3">${tableDust}</td>
+                            <td class="p-3 font-bold">${tableGas}</td>
+                        </tr>`;
+                    });
+                    document.getElementById('analytics-table-body').innerHTML = tbody;
+                    document.getElementById('pdf-table-body').innerHTML = tbody; 
+
+                    if(rawData.length > 0) {
+                        let currentGas = Math.round((rawData[0].mq135_gas * GAS_MULTIPLIER) + GAS_OFFSET);
+                        if (currentGas < 0) currentGas = 0;
+
+                        document.getElementById('pdf-gas').innerText = currentGas + " PPM";
+                        document.getElementById('pdf-temp').innerText = rawData[0].temp + " °C";
+                        document.getElementById('pdf-dust').innerText = (rawData[0].dust_1 * DUST_MULTIPLIER).toFixed(3) + " mg/m³";
+                        document.getElementById('pdf-diagnosis').innerHTML = currentGas > 600 ? "<span style='color:red;font-weight:bold'>CRITICAL HAZARD.</span>" : "<span style='color:green;font-weight:bold'>Optimal Environment.</span>";
+                    }
+                } catch(e){}
+            }
 
             window.toggleTheme = function() {
                 const html = document.documentElement;
@@ -483,7 +673,6 @@
                 else modal.classList.remove('active');
             };
 
-            // ROBUST DATE-TIME EXTRACTOR (Used for Export & History Logs to show Date + Time)
             function extractFullDateTime(ts) {
                 if (!ts) return "--:--:--";
                 let str = String(ts);
@@ -503,7 +692,6 @@
                 } catch(e) { return str; }
             }
 
-            // EXTRACT ONLY TIME (Used for X-Axis on Live Graph)
             function extractTimeOnly(ts) {
                 let full = extractFullDateTime(ts);
                 if(full.includes(" ")) return full.split(" ")[1];
@@ -547,7 +735,6 @@
 
             Chart.defaults.font.family = 'Segoe UI';
             
-            // 1. MAIN LIVE CHART (Solid = Actual, Dotted = ML Forecast, Dashed = Holts)
             window.liveChartInstance = new Chart(document.getElementById('liveChart').getContext('2d'), {
                 type: 'line',
                 data: { labels: [], datasets: [
@@ -561,7 +748,6 @@
                 options: { responsive: true, maintainAspectRatio: false, scales: { x: { title:{display:true, text:'Time / Future Forecast'}, grid: { color: 'rgba(128,128,128,0.15)' } }, y: { title:{display:true, text:'Sensor Value'}, grid: { color: 'rgba(128,128,128,0.15)' } } } }
             });
 
-            // 2. HISTORY CHART (Past/Present, All Parameters)
             window.historyChartInstance = new Chart(document.getElementById('historyChart').getContext('2d'), {
                 type: 'line',
                 data: { labels: [], datasets: [
@@ -573,7 +759,6 @@
                 options: { responsive: true, maintainAspectRatio: false, scales: { x: { grid: { color: 'rgba(128,128,128,0.15)' } }, y: { grid: { color: 'rgba(128,128,128,0.15)' } } } }
             });
 
-            // 3. HISTORY FORECAST CHART (Future ML + Holts)
             window.historyForecastInstance = new Chart(document.getElementById('historyForecastChart').getContext('2d'), {
                 type: 'line',
                 data: { labels: [], datasets: [
@@ -585,7 +770,6 @@
                 options: { responsive: true, maintainAspectRatio: false, scales: { x: { grid: { color: 'rgba(128,128,128,0.15)' } }, y: { grid: { color: 'rgba(128,128,128,0.15)' } } } }
             });
 
-            // GENERATE A STATIC, DETERMINISTIC HISTORY DATASET (NEVER CHANGES ON CLICK)
             window.staticHistory = { past: { labels:[], gas:[], temp:[], hum:[], dust:[] }, present: { labels:[], gas:[], temp:[], hum:[], dust:[] } };
             
             let baseDate = new Date();
@@ -611,7 +795,6 @@
                 ['past', 'present', 'future'].forEach(id => { document.getElementById('btn-' + id).className = "flex-1 px-4 py-2 text-sm font-bold rounded-md text-gray-500 dark:text-gray-400 transition hover:text-gray-900 dark:hover:text-white"; });
                 document.getElementById('btn-' + type).className = type === 'future' ? "flex-1 px-4 py-2 text-sm font-bold rounded-md bg-purple-600 text-white shadow transition" : "flex-1 px-4 py-2 text-sm font-bold rounded-md bg-white dark:bg-slate-700 shadow-sm transition";
                 
-                // ONLY UPDATE FUTURE GRAPH IF FUTURE IS CLICKED
                 if(type === 'future') {
                     let currentGasArray = window.historyChartInstance.data.datasets[0].data;
                     let holtsGas = holtForecast(currentGasArray, 0.6, 0.4, 7);
@@ -620,14 +803,13 @@
                     for(let i=1; i<=7; i++) { hfLabels.push("+"+i+" Steps"); }
                     
                     window.historyForecastInstance.data.labels = hfLabels;
-                    window.historyForecastInstance.data.datasets[1].data = holtsGas; // Holts Gas
+                    window.historyForecastInstance.data.datasets[1].data = holtsGas; 
                     
                     if(window.lastMLForecast) {
-                        window.historyForecastInstance.data.datasets[0].data = window.lastMLForecast.gas; // ML Gas
+                        window.historyForecastInstance.data.datasets[0].data = window.lastMLForecast.gas; 
                         window.historyForecastInstance.data.datasets[2].data = window.lastMLForecast.temp;
                         window.historyForecastInstance.data.datasets[3].data = window.lastMLForecast.hum;
                     } else {
-                        // Mock ML fallback for History if API is offline
                         let mockMlGas = holtForecast(currentGasArray, 0.2, 0.1, 7).map(v => v + (Math.random()*10 - 5));
                         window.historyForecastInstance.data.datasets[0].data = mockMlGas;
                     }
@@ -635,7 +817,6 @@
                     return; 
                 }
 
-                // If Past or Present is clicked, push the static data to the main history graph
                 let targetData = type === 'past' ? window.staticHistory.past : window.staticHistory.present;
                 
                 window.historyChartInstance.data.labels = targetData.labels;
@@ -646,144 +827,13 @@
                 window.historyChartInstance.update();
             };
 
-            window.currentLiveState = [];
-            window.lastMLForecast = null;
-
-            async function fetchSensorData() {
-                let rawData = [];
-                let isDemoMode = false;
-
-                try {
-                    // UPDATED: Now connects to Render Cloud!
-                    const response = await fetch('https://weather-cloud-api.onrender.com/api/data');
-                    const json = await response.json();
-                    if (json.status === "success" && json.data && json.data.length > 0) rawData = json.data;
-                    else isDemoMode = true; 
-                } catch (error) { isDemoMode = true; }
-
-                if (isDemoMode) {
-                    document.getElementById('system-status-badge').className = "px-3 py-1.5 bg-yellow-500/10 border border-yellow-500/30 text-yellow-600 dark:text-yellow-400 rounded-full text-xs font-bold";
-                    document.getElementById('system-status-text').innerText = "SERVER WAKING UP (DEMO MODE)";
-                    let now = new Date();
-                    for(let i=0; i<30; i++) {
-                        let d = new Date(now.getTime() - (30-i)*5000);
-                        // ISO String to maintain proper parsing in demo mode
-                        rawData.push({ timestamp: d.toISOString(), temp: (32 + Math.random()*2).toFixed(1), hum: (65 + Math.random()*3).toFixed(1), dust_1: (0.08 + Math.random()*0.03).toFixed(3), mq135_gas: Math.floor(420 + Math.random()*40), lat: 8.5241, lon: 76.9366 });
-                    }
-                    rawData.reverse();
-                } else {
-                    document.getElementById('system-status-badge').className = "px-3 py-1.5 bg-green-500/10 border border-green-500/30 text-green-600 dark:text-green-400 rounded-full text-xs font-bold";
-                    document.getElementById('system-status-text').innerText = "LIVE CLOUD CONNECTED";
-                }
-
-                window.currentLiveState = rawData;
-                const latest = rawData[0];
-
-                try {
-                    document.getElementById('val-temp').innerHTML = latest.temp;
-                    document.getElementById('val-hum').innerHTML = latest.hum;
-                    document.getElementById('val-dust1').innerHTML = latest.dust_1;
-                    document.getElementById('val-gas').innerHTML = latest.mq135_gas;
-                    
-                    let lat = parseFloat(latest.lat) || 8.5241;
-                    let lon = parseFloat(latest.lon) || 76.9366;
-                    document.getElementById('map-coords').innerText = `${lat.toFixed(4)} , ${lon.toFixed(4)}`;
-                    marker.setLatLng([lat, lon]);
-                } catch(e) {}
-
-                // UPDATE MAIN LIVE CHART (Time on X axis)
-                let timestamps = rawData.slice(0, 30).reverse().map(d => extractTimeOnly(d.timestamp));
-                let actualGas = rawData.slice(0, 30).reverse().map(d => parseFloat(d.mq135_gas));
-                let actualDust = rawData.slice(0, 30).reverse().map(d => parseFloat(d.dust_1) * 1000);
-
-                // Add future labels
-                for(let i=1; i<=6; i++) timestamps.push("+" + i + " Hr");
-                
-                let padGas = [...actualGas]; let padDust = [...actualDust]; 
-                for(let i=0; i<6; i++) { padGas.push(null); padDust.push(null); }
-                
-                // Calculate Edge AI (Holts)
-                let holtGasRaw = holtForecast(actualGas, 0.5, 0.3, 6);
-                let holtDustRaw = holtForecast(actualDust, 0.5, 0.3, 6);
-                
-                let fHoltGas = Array(actualGas.length - 1).fill(null);
-                fHoltGas.push(actualGas[actualGas.length - 1]); fHoltGas = fHoltGas.concat(holtGasRaw);
-                
-                let fHoltDust = Array(actualDust.length - 1).fill(null);
-                fHoltDust.push(actualDust[actualDust.length - 1]); fHoltDust = fHoltDust.concat(holtDustRaw);
-
-                // Fetch Cloud AI (ML) Hourly Forecast
-                try {
-                    // UPDATED: Now connects to Render Cloud!
-                    const mlResponse = await fetch('https://weather-cloud-api.onrender.com/api/ml_forecast');
-                    const mlJson = await mlResponse.json();
-                    
-                    if (mlJson.status === "success") {
-                        window.lastMLForecast = mlJson.forecast;
-                        let mlGas = mlJson.forecast.gas;
-                        let mlDust = mlJson.forecast.dust_1.map(d => d * 1000);
-                        
-                        let fMlGas = Array(actualGas.length - 1).fill(null);
-                        fMlGas.push(actualGas[actualGas.length - 1]); fMlGas = fMlGas.concat(mlGas);
-                        
-                        let fMlDust = Array(actualDust.length - 1).fill(null);
-                        fMlDust.push(actualDust[actualDust.length - 1]); fMlDust = fMlDust.concat(mlDust);
-
-                        window.liveChartInstance.data.labels = timestamps;
-                        window.liveChartInstance.data.datasets[0].data = padGas;
-                        window.liveChartInstance.data.datasets[1].data = fMlGas; // ML Gas (Dotted)
-                        window.liveChartInstance.data.datasets[2].data = fHoltGas; // Holts Gas (Dashed)
-                        window.liveChartInstance.data.datasets[3].data = padDust;
-                        window.liveChartInstance.data.datasets[4].data = fMlDust; // ML Dust (Dotted)
-                        window.liveChartInstance.data.datasets[5].data = fHoltDust; // Holts Dust (Dashed)
-                        window.liveChartInstance.update('none');
-
-                        document.getElementById('ml-status').innerHTML = "<i class='fa-solid fa-check-circle mr-1'></i> Model Active";
-                        
-                        let forecastHtml = "";
-                        for(let i=0; i<6; i++) {
-                            let gasColor = mlGas[i] > 600 ? 'text-red-500' : (mlGas[i] > 450 ? 'text-yellow-500' : 'text-green-500');
-                            forecastHtml += `<div class="forecast-card glass-card p-4 text-center border border-gray-200 dark:border-gray-700">
-                                <span class="text-xs font-bold text-gray-500 mb-2 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-full">+${i+1} Hr</span>
-                                <div class="text-xl font-black ${gasColor} mt-2 mb-1">${mlGas[i]} <span class="text-[10px] text-gray-400">PPM</span></div>
-                                <div class="text-xs text-gray-500 flex justify-between px-2"><i class="fa-solid fa-temperature-empty text-orange-400"></i> ${mlJson.forecast.temp[i]}°</div>
-                            </div>`;
-                        }
-                        document.getElementById('forecast-container').innerHTML = forecastHtml;
-                    }
-                } catch(e) { }
-
-                // UPDATE ALL TABLES AND EXPORT PDF TAB
-                try {
-                    let tbody = "";
-                    rawData.forEach(row => {
-                        let fullDT = extractFullDateTime(row.timestamp);
-                        tbody += `<tr class="border-b border-gray-100 dark:border-gray-800">
-                            <td class="p-3 font-mono text-xs">${fullDT}</td>
-                            <td class="p-3">${row.temp}</td>
-                            <td class="p-3">${row.hum}</td>
-                            <td class="p-3">${row.dust_1}</td>
-                            <td class="p-3 font-bold">${row.mq135_gas}</td>
-                        </tr>`;
-                    });
-                    document.getElementById('analytics-table-body').innerHTML = tbody;
-                    document.getElementById('pdf-table-body').innerHTML = tbody; // Fixes Export Table headers mapping
-
-                    if(rawData.length > 0) {
-                        document.getElementById('pdf-gas').innerText = rawData[0].mq135_gas + " PPM";
-                        document.getElementById('pdf-temp').innerText = rawData[0].temp + " °C";
-                        document.getElementById('pdf-dust').innerText = rawData[0].dust_1 + " mg/m³";
-                        document.getElementById('pdf-diagnosis').innerHTML = rawData[0].mq135_gas > 600 ? "<span style='color:red;font-weight:bold'>CRITICAL HAZARD.</span>" : "<span style='color:green;font-weight:bold'>Optimal Environment.</span>";
-                    }
-                } catch(e){}
-            }
-
-            // HIGHLY DETAILED AI DIAGNOSIS ENGINE
             window.runAIAnalysis = function() {
                 const box = document.getElementById('ai-response');
                 if(!window.currentLiveState || !window.currentLiveState.length) return;
                 
-                let presentGas = window.currentLiveState[0].mq135_gas;
+                let presentGas = Math.round((window.currentLiveState[0].mq135_gas * GAS_MULTIPLIER) + GAS_OFFSET);
+                if (presentGas < 0) presentGas = 0;
+                
                 let pastGasBase = 410; 
                 let deviationGas = (((presentGas - pastGasBase) / pastGasBase) * 100).toFixed(1);
                 
@@ -867,25 +917,21 @@
     </div>
 
     <script>
-        // Intercept and log all backend network requests to the floating terminal
         const originalFetch = window.fetch;
         window.fetch = async function(...args) {
             const terminal = document.getElementById('dev-terminal-content');
             const time = new Date().toLocaleTimeString();
             const url = args[0];
             
-            // Log the outgoing request
             terminal.innerHTML += `<div class="text-blue-400">[${time}] REQ -> ${url.split('/').pop()}</div>`;
             terminal.scrollTop = terminal.scrollHeight;
             
             try {
                 const response = await originalFetch(...args);
-                // Log the successful response
                 terminal.innerHTML += `<div class="text-green-400">[${time}] RES <- 200 OK (${url.split('/').pop()})</div>`;
                 terminal.scrollTop = terminal.scrollHeight;
                 return response;
             } catch (err) {
-                // Log errors (like if the Python server turns off)
                 terminal.innerHTML += `<div class="text-red-500">[${time}] ERR <- CONNECTION REFUSED</div>`;
                 terminal.scrollTop = terminal.scrollHeight;
                 throw err;
