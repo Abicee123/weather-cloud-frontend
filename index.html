@@ -118,37 +118,26 @@
             </div>
         </div>
 
-        <div class="glass-card p-6 md:p-8 mb-6 border-l-4 border-indigo-500">
-            <h2 class="text-xl font-bold mb-4 text-slate-800 dark:text-white"><i class="fa-solid fa-book-open-reader text-indigo-500 mr-2"></i>User Guide: Parameter Thresholds & Graph Logic</h2>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm text-slate-700 dark:text-slate-300 leading-relaxed mb-6">
-                <div>
-                    <h3 class="font-bold text-red-500 mb-1"><i class="fa-solid fa-smog mr-1"></i> MQ135 Gas (PPM)</h3>
-                    <p class="mb-2">Measures volatile organic compounds (VOCs) including smoke, ammonia, benzene, and exhaust gases. Evaluated in <b>Parts Per Million (PPM)</b>, meaning the number of toxic molecules per one million air molecules.</p>
-                    <ul class="text-xs space-y-2 mt-3 bg-gray-50 dark:bg-slate-900 p-3 rounded border border-gray-200 dark:border-gray-700">
-                        <li><span class="inline-block w-3 h-3 rounded-full bg-green-500 mr-2"></span><b class="text-green-600 dark:text-green-400">0 - 450 PPM (Safe):</b> Normal, clean fresh air baseline.</li>
-                        <li><span class="inline-block w-3 h-3 rounded-full bg-yellow-500 mr-2"></span><b class="text-yellow-600 dark:text-yellow-400">450 - 600 PPM (Warning):</b> Moderate pollution. Feels stuffy; prolonged exposure may irritate asthma.</li>
-                        <li><span class="inline-block w-3 h-3 rounded-full bg-red-500 mr-2"></span><b class="text-red-600 dark:text-red-400">Above 600 PPM (Hazard):</b> Critical danger limit. Severe chemical or smoke presence requiring immediate action.</li>
-                    </ul>
-                </div>
-                <div>
-                    <h3 class="font-bold text-purple-500 mb-1"><i class="fa-solid fa-particles mr-1"></i> Particulate Dust (mg/m³)</h3>
-                    <p class="mb-2">Optical sensors utilize an infrared LED to measure physical solid particles floating in the air (dirt, ash, fine smoke). Evaluated in <b>Milligrams per Cubic Meter (mg/m³)</b>.</p>
-                    <ul class="text-xs space-y-2 mt-3 bg-gray-50 dark:bg-slate-900 p-3 rounded border border-gray-200 dark:border-gray-700">
-                        <li><span class="inline-block w-3 h-3 rounded-full bg-green-500 mr-2"></span><b class="text-green-600 dark:text-green-400">0.00 - 0.05 mg/m³ (Clear):</b> Optimal, clean environment.</li>
-                        <li><span class="inline-block w-3 h-3 rounded-full bg-yellow-500 mr-2"></span><b class="text-yellow-600 dark:text-yellow-400">0.06 - 0.10 mg/m³ (Hazy):</b> Noticeable dust presence, potential respiratory irritant.</li>
-                        <li><span class="inline-block w-3 h-3 rounded-full bg-red-500 mr-2"></span><b class="text-red-600 dark:text-red-400">Above 0.10 mg/m³ (Severe):</b> Dense particulate cloud. N95 filtration masks recommended.</li>
-                    </ul>
+        <div class="glass-card p-6 mb-6">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 border-b border-gray-200 dark:border-gray-700 pb-2 gap-4">
+                <div class="flex items-center">
+                    <h3 class="text-lg font-bold"><i class="fa-solid fa-table-list text-indigo-500 mr-2"></i>Sensor Data Log</h3>
                 </div>
             </div>
-
-            <div class="bg-indigo-50 dark:bg-indigo-900/20 p-5 rounded-lg border border-indigo-200 dark:border-indigo-800">
-                <h3 class="font-bold text-indigo-700 dark:text-indigo-400 mb-2 uppercase tracking-wider text-sm"><i class="fa-solid fa-scale-balanced mr-2"></i>The Unification Scaling Rule: How we plot mg/m³ and PPM together</h3>
-                <p class="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
-                    Plotting multiple environmental factors on a single Y-Axis creates a massive mathematical visualization problem. A dangerous Gas reading is <b>600</b> (PPM), while a dangerous Dust reading is <b>0.10</b> (mg/m³). If we plot them normally, the dust line would be invisible—completely flattened against the bottom of the graph at 0.10. 
-                </p>
-                <p class="text-sm text-slate-700 dark:text-slate-300 leading-relaxed mt-2">
-                    To solve this, our JavaScript visualization engine applies a <b>x1000 Multiplier</b> to all incoming dust arrays strictly for rendering purposes. Therefore, a reading of <code class="bg-white dark:bg-slate-950 px-1 py-0.5 rounded text-indigo-600 dark:text-indigo-400">0.05 mg/m³</code> is plotted on the graph at <code class="bg-white dark:bg-slate-950 px-1 py-0.5 rounded text-indigo-600 dark:text-indigo-400">50</code>. This mathematical normalization allows the human eye to instantly track the <i>momentum</i> and relationship between gas and dust simultaneously without requiring separate, confusing Y-axes.
-                </p>
+            <div class="table-container rounded-lg border border-gray-200 dark:border-gray-700">
+                <table class="w-full text-left border-collapse text-sm">
+                    <thead class="sticky top-0 z-10 sticky-header border-b border-gray-200 dark:border-gray-700 shadow-sm">
+                        <tr class="text-gray-500 dark:text-gray-400 uppercase text-xs tracking-wider">
+                            <th class="p-3">Date & Time</th>
+                            <th class="p-3">Temp (°C)</th>
+                            <th class="p-3">Humidity (%)</th>
+                            <th class="p-3">Dust Density</th>
+                            <th class="p-3">MQ135 Gas (PPM)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="analytics-table-body" class="text-gray-700 dark:text-gray-300 divide-y divide-gray-100 dark:divide-gray-800">
+                    </tbody>
+                </table>
             </div>
         </div>
 
@@ -232,26 +221,37 @@
             </div>
         </div>
 
-        <div class="glass-card p-6">
-            <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 border-b border-gray-200 dark:border-gray-700 pb-2 gap-4">
-                <div class="flex items-center">
-                    <h3 class="text-lg font-bold"><i class="fa-solid fa-table-list text-indigo-500 mr-2"></i>Sensor Data Log</h3>
+        <div class="glass-card p-6 md:p-8 border-l-4 border-indigo-500">
+            <h2 class="text-xl font-bold mb-4 text-slate-800 dark:text-white"><i class="fa-solid fa-book-open-reader text-indigo-500 mr-2"></i>User Guide: Parameter Thresholds & Graph Logic</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm text-slate-700 dark:text-slate-300 leading-relaxed mb-6">
+                <div>
+                    <h3 class="font-bold text-red-500 mb-1"><i class="fa-solid fa-smog mr-1"></i> MQ135 Gas (PPM)</h3>
+                    <p class="mb-2">Measures volatile organic compounds (VOCs) including smoke, ammonia, benzene, and exhaust gases. Evaluated in <b>Parts Per Million (PPM)</b>, meaning the number of toxic molecules per one million air molecules.</p>
+                    <ul class="text-xs space-y-2 mt-3 bg-gray-50 dark:bg-slate-900 p-3 rounded border border-gray-200 dark:border-gray-700">
+                        <li><span class="inline-block w-3 h-3 rounded-full bg-green-500 mr-2"></span><b class="text-green-600 dark:text-green-400">0 - 450 PPM (Safe):</b> Normal, clean fresh air baseline.</li>
+                        <li><span class="inline-block w-3 h-3 rounded-full bg-yellow-500 mr-2"></span><b class="text-yellow-600 dark:text-yellow-400">450 - 600 PPM (Warning):</b> Moderate pollution. Feels stuffy; prolonged exposure may irritate asthma.</li>
+                        <li><span class="inline-block w-3 h-3 rounded-full bg-red-500 mr-2"></span><b class="text-red-600 dark:text-red-400">Above 600 PPM (Hazard):</b> Critical danger limit. Severe chemical or smoke presence requiring immediate action.</li>
+                    </ul>
+                </div>
+                <div>
+                    <h3 class="font-bold text-purple-500 mb-1"><i class="fa-solid fa-particles mr-1"></i> Particulate Dust (mg/m³)</h3>
+                    <p class="mb-2">Optical sensors utilize an infrared LED to measure physical solid particles floating in the air (dirt, ash, fine smoke). Evaluated in <b>Milligrams per Cubic Meter (mg/m³)</b>.</p>
+                    <ul class="text-xs space-y-2 mt-3 bg-gray-50 dark:bg-slate-900 p-3 rounded border border-gray-200 dark:border-gray-700">
+                        <li><span class="inline-block w-3 h-3 rounded-full bg-green-500 mr-2"></span><b class="text-green-600 dark:text-green-400">0.00 - 0.05 mg/m³ (Clear):</b> Optimal, clean environment.</li>
+                        <li><span class="inline-block w-3 h-3 rounded-full bg-yellow-500 mr-2"></span><b class="text-yellow-600 dark:text-yellow-400">0.06 - 0.10 mg/m³ (Hazy):</b> Noticeable dust presence, potential respiratory irritant.</li>
+                        <li><span class="inline-block w-3 h-3 rounded-full bg-red-500 mr-2"></span><b class="text-red-600 dark:text-red-400">Above 0.10 mg/m³ (Severe):</b> Dense particulate cloud. N95 filtration masks recommended.</li>
+                    </ul>
                 </div>
             </div>
-            <div class="table-container rounded-lg border border-gray-200 dark:border-gray-700">
-                <table class="w-full text-left border-collapse text-sm">
-                    <thead class="sticky top-0 z-10 sticky-header border-b border-gray-200 dark:border-gray-700 shadow-sm">
-                        <tr class="text-gray-500 dark:text-gray-400 uppercase text-xs tracking-wider">
-                            <th class="p-3">Date & Time</th>
-                            <th class="p-3">Temp (°C)</th>
-                            <th class="p-3">Humidity (%)</th>
-                            <th class="p-3">Dust Density</th>
-                            <th class="p-3">MQ135 Gas (PPM)</th>
-                        </tr>
-                    </thead>
-                    <tbody id="analytics-table-body" class="text-gray-700 dark:text-gray-300 divide-y divide-gray-100 dark:divide-gray-800">
-                    </tbody>
-                </table>
+
+            <div class="bg-indigo-50 dark:bg-indigo-900/20 p-5 rounded-lg border border-indigo-200 dark:border-indigo-800">
+                <h3 class="font-bold text-indigo-700 dark:text-indigo-400 mb-2 uppercase tracking-wider text-sm"><i class="fa-solid fa-scale-balanced mr-2"></i>The Unification Scaling Rule: How we plot mg/m³ and PPM together</h3>
+                <p class="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
+                    Plotting multiple environmental factors on a single Y-Axis creates a massive mathematical visualization problem. A dangerous Gas reading is <b>600</b> (PPM), while a dangerous Dust reading is <b>0.10</b> (mg/m³). If we plot them normally, the dust line would be invisible—completely flattened against the bottom of the graph at 0.10. 
+                </p>
+                <p class="text-sm text-slate-700 dark:text-slate-300 leading-relaxed mt-2">
+                    To solve this, our JavaScript visualization engine applies a <b>x1000 Multiplier</b> to all incoming dust arrays strictly for rendering purposes. Therefore, a reading of <code class="bg-white dark:bg-slate-950 px-1 py-0.5 rounded text-indigo-600 dark:text-indigo-400">0.05 mg/m³</code> is plotted on the graph at <code class="bg-white dark:bg-slate-950 px-1 py-0.5 rounded text-indigo-600 dark:text-indigo-400">50</code>. This mathematical normalization allows the human eye to instantly track the <i>momentum</i> and relationship between gas and dust simultaneously without requiring separate, confusing Y-axes.
+                </p>
             </div>
         </div>
     </div>
