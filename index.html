@@ -490,7 +490,7 @@
                 let rawData = [];
 
                 try {
-                    // 1. ATTEMPT CLOUD CONNECTION
+                    // IT IS FETCHING FROM RENDER!
                     const response = await fetch('https://weather-cloud-api.onrender.com/api/data');
                     if (!response.ok) throw new Error("Server response not OK");
                     
@@ -500,12 +500,22 @@
                     if (json.status === "success" && json.data && json.data.length > 0) {
                         rawData = json.data;
                         
-                        // 3. THE STALENESS CHECK (Is the data fresh?)
-                        const latestTime = new Date(rawData[0].timestamp).getTime();
+                        // --- THE TIMEZONE FIX ---
+                        let dbTimeStr = String(rawData[0].timestamp);
+                        
+                        // If the cloud didn't add a timezone marker, force it to UTC ('Z')
+                        // This stops your Indian browser from thinking the data is 5.5 hours old!
+                        if (!dbTimeStr.includes('Z') && !dbTimeStr.includes('GMT')) {
+                            dbTimeStr = dbTimeStr.replace(' ', 'T') + 'Z';
+                        }
+                        
+                        const latestTime = new Date(dbTimeStr).getTime();
                         const now = new Date().getTime();
+                        
+                        // Calculate difference in minutes
                         const diffMinutes = (now - latestTime) / (1000 * 60); 
                         
-                        // If the newest data is older than 3 minutes, the ESP32 is offline!
+                        // If the newest data is older than 3 minutes, the hardware is offline!
                         if (diffMinutes > 3) {
                             updateUIStatus('STALE');
                         } else {
