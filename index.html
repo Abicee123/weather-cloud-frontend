@@ -503,10 +503,13 @@
                         // --- THE TIMEZONE FIX ---
                         let dbTimeStr = String(rawData[0].timestamp);
                         
-                        // If the cloud didn't add a timezone marker, force it to UTC ('Z')
-                        // This stops your Indian browser from thinking the data is 5.5 hours old!
+                        // Force it to UTC ('Z') so the browser converts it to Indian Time
                         if (!dbTimeStr.includes('Z') && !dbTimeStr.includes('GMT')) {
-                            dbTimeStr = dbTimeStr.replace(' ', 'T') + 'Z';
+                            if (dbTimeStr.includes('T')) {
+                                dbTimeStr = dbTimeStr + 'Z';
+                            } else {
+                                dbTimeStr = dbTimeStr.replace(' ', 'T') + 'Z';
+                            }
                         }
                         
                         const latestTime = new Date(dbTimeStr).getTime();
@@ -689,23 +692,34 @@
                 else modal.classList.remove('active');
             };
 
+            // ==========================================
+            // 🕒 NEW: INDIAN TIMEZONE CONVERSION FIX
+            // ==========================================
             function extractFullDateTime(ts) {
                 if (!ts) return "--:--:--";
-                let str = String(ts);
                 try {
-                    if (str.includes("T")) {
-                        let parts = str.split("T");
-                        let date = parts[0];
-                        let time = parts[1].substring(0, 8);
-                        return date + " " + time;
+                    let str = String(ts);
+                    // 1. Force the database string into strict UTC format
+                    if (!str.includes('Z') && !str.includes('GMT')) {
+                        if (str.includes('T')) {
+                            str = str + 'Z';
+                        } else {
+                            str = str.replace(' ', 'T') + 'Z';
+                        }
                     }
-                    if (str.length < 10) {
-                        let today = new Date();
-                        let dStr = today.getFullYear() + "-" + String(today.getMonth() + 1).padStart(2, '0') + "-" + String(today.getDate()).padStart(2, '0');
-                        return dStr + " " + str;
-                    }
-                    return str;
-                } catch(e) { return str; }
+                    
+                    // 2. Parse the UTC time through the browser's local Indian timezone
+                    let d = new Date(str);
+                    if (isNaN(d.getTime())) return String(ts); 
+                    
+                    // 3. Rebuild the string using local Date() methods
+                    let date = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, '0') + "-" + String(d.getDate()).padStart(2, '0');
+                    let time = String(d.getHours()).padStart(2, '0') + ":" + String(d.getMinutes()).padStart(2, '0') + ":" + String(d.getSeconds()).padStart(2, '0');
+                    
+                    return date + " " + time;
+                } catch(e) { 
+                    return String(ts); 
+                }
             }
 
             function extractTimeOnly(ts) {
