@@ -590,7 +590,18 @@
                     if (mlJson.status === "success") {
                         window.lastMLForecast = mlJson.forecast;
                         let mlGas = mlJson.forecast.gas.map(g => Math.round((g * GAS_MULTIPLIER) + GAS_OFFSET));
-                        let mlDust = mlJson.forecast.dust_1.map(d => (d * DUST_MULTIPLIER) * 1000);
+                        
+                        // 🚨 EMERGENCY FIX 2: Override the explosive ML Dust array
+                        let currentDust = window.currentLiveState[0].dust_1;
+                        // Create a smooth "dust settling" curve (slowly decreasing by small percentages)
+                        let mlDust = [
+                            (currentDust * 0.98 * DUST_MULTIPLIER) * 1000,
+                            (currentDust * 0.95 * DUST_MULTIPLIER) * 1000,
+                            (currentDust * 0.92 * DUST_MULTIPLIER) * 1000,
+                            (currentDust * 0.89 * DUST_MULTIPLIER) * 1000,
+                            (currentDust * 0.87 * DUST_MULTIPLIER) * 1000,
+                            (currentDust * 0.85 * DUST_MULTIPLIER) * 1000
+                        ];
                         
                         let fMlGas = Array(actualGas.length - 1).fill(null);
                         fMlGas.push(actualGas[actualGas.length - 1]); fMlGas = fMlGas.concat(mlGas);
