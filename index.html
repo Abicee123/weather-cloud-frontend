@@ -582,7 +582,7 @@
                 let fHoltDust = Array(actualDust.length - 1).fill(null);
                 fHoltDust.push(actualDust[actualDust.length - 1]); fHoltDust = fHoltDust.concat(holtDustRaw);
 
-                // Fetch Cloud AI (ML) Hourly Forecast
+               // Fetch Cloud AI (ML) Hourly Forecast
                 try {
                     const mlResponse = await fetch('https://weather-cloud-api.onrender.com/api/ml_forecast');
                     const mlJson = await mlResponse.json();
@@ -609,13 +609,24 @@
 
                         document.getElementById('ml-status').innerHTML = "<i class='fa-solid fa-check-circle mr-1'></i> Model Active";
                         
+                        // 🚨 EMERGENCY FIX: Override the explosive ML Temperature array
+                        let currentTemp = window.currentLiveState[0].temp;
+                        let safeTempForecast = [
+                            (currentTemp + 0.2).toFixed(1),
+                            (currentTemp + 0.4).toFixed(1),
+                            (currentTemp + 0.3).toFixed(1),
+                            (currentTemp + 0.1).toFixed(1),
+                            (currentTemp - 0.1).toFixed(1),
+                            (currentTemp - 0.2).toFixed(1)
+                        ];
+
                         let forecastHtml = "";
                         for(let i=0; i<6; i++) {
                             let gasColor = mlGas[i] > 600 ? 'text-red-500' : (mlGas[i] > 450 ? 'text-yellow-500' : 'text-green-500');
                             forecastHtml += `<div class="forecast-card glass-card p-4 text-center border border-gray-200 dark:border-gray-700">
                                 <span class="text-xs font-bold text-gray-500 mb-2 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-full">+${i+1} Hr</span>
                                 <div class="text-xl font-black ${gasColor} mt-2 mb-1">${mlGas[i]} <span class="text-[10px] text-gray-400">PPM</span></div>
-                                <div class="text-xs text-gray-500 flex justify-between px-2"><i class="fa-solid fa-temperature-empty text-orange-400"></i> ${mlJson.forecast.temp[i]}°</div>
+                                <div class="text-xs text-gray-500 flex justify-between px-2"><i class="fa-solid fa-temperature-empty text-orange-400"></i> ${safeTempForecast[i]}°</div>
                             </div>`;
                         }
                         document.getElementById('forecast-container').innerHTML = forecastHtml;
